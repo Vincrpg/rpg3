@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat — Sistema de Mensagens</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap');
+
+:root {
+  --bg: #0c0c0e; --bg2: #111115; --panel: #16161a;
+  --border: #252530; --border2: #2e2e3a;
+  --text: #e8e8f0; --text-dim: #6a6a80; --text-dimmer: #333340;
+  --accent: #7c6af7; --accent-dim: #4a3fa0;
+  --green: #3ecf8e; --red: #f06060;
+  --msg-own: #1e1a3a; --msg-other: #18181e;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body {
+  background:var(--bg); color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif; font-size:14px;
+  display:flex; flex-direction:column; height:100vh;
+}
+
+#login-screen {
+  position:fixed; inset:0; background:var(--bg);
+  display:flex; align-items:center; justify-content:center; z-index:100;
+}
+.login-box {
+  background:var(--panel); border:1px solid var(--border2);
+  padding:48px 52px; width:100%; max-width:420px;
+  display:flex; flex-direction:column; gap:20px; position:relative;
+}
+.login-box::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(to right, var(--accent-dim), var(--accent), var(--accent-dim));
+}
+.login-logo { font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:0.3em; color:var(--accent); text-transform:uppercase; }
+.login-title { font-size:22px; font-weight:600; color:var(--text); }
+.login-sub { font-size:13px; color:var(--text-dim); font-style:italic; margin-top:-8px; }
+.login-field { display:flex; flex-direction:column; gap:8px; }
+.login-field label { font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:var(--text-dim); }
+.login-field input {
+  background:var(--bg2); border:1px solid var(--border); padding:11px 14px;
+  color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:15px;
+  outline:none; transition:border-color 0.2s; width:100%;
+}
+.login-field input:focus { border-color:var(--accent); }
+.login-field input::placeholder { color:var(--text-dimmer); }
+.login-btn {
+  background:var(--accent); border:none; padding:12px; color:#fff;
+  font-family:'Share Tech Mono',monospace; font-size:12px; letter-spacing:0.2em;
+  text-transform:uppercase; cursor:pointer; transition:opacity 0.2s;
+}
+.login-btn:hover { opacity:0.85; }
+.login-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.login-err { font-size:12px; color:var(--red); font-style:italic; display:none; text-align:center; }
+.storage-note { font-size:10px; color:var(--text-dimmer); text-align:center; font-family:'Share Tech Mono',monospace; letter-spacing:0.05em; }
+
+#app { display:none; flex-direction:column; height:100vh; overflow:hidden; }
+#app.visible { display:flex; }
+
+.topbar {
+  background:var(--panel); border-bottom:1px solid var(--border);
+  padding:0 20px; height:52px; display:flex; align-items:center;
+  justify-content:space-between; flex-shrink:0;
+}
+.topbar-logo { font-family:'Share Tech Mono',monospace; font-size:13px; letter-spacing:0.15em; color:var(--accent); }
+.topbar-status { font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--green); }
+.dot.offline { background:var(--red); }
+.topbar-right { display:flex; align-items:center; gap:14px; }
+.user-badge { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-dim); }
+.user-avatar {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Share Tech Mono',monospace; font-size:11px; font-weight:bold; color:#fff;
+}
+.btn-exit {
+  background:transparent; border:1px solid var(--border2); padding:5px 14px;
+  color:var(--text-dim); font-family:'Share Tech Mono',monospace;
+  font-size:10px; letter-spacing:0.15em; text-transform:uppercase;
+  cursor:pointer; transition:all 0.2s;
+}
+.btn-exit:hover { border-color:var(--red); color:var(--red); }
+
+.messages-wrap {
+  flex:1; overflow-y:auto; padding:20px;
+  display:flex; flex-direction:column; gap:2px;
+  scrollbar-width:thin; scrollbar-color:var(--border2) transparent;
+}
+.messages-wrap::-webkit-scrollbar { width:4px; }
+.messages-wrap::-webkit-scrollbar-thumb { background:var(--border2); }
+
+.msg-group { display:flex; flex-direction:column; margin-bottom:12px; }
+.msg-meta { display:flex; align-items:baseline; gap:10px; margin-bottom:4px; padding:0 4px; }
+.msg-author { font-weight:600; font-size:13px; }
+.msg-time { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--text-dimmer); }
+.msg-bubble {
+  background:var(--msg-other); border:1px solid var(--border);
+  border-radius:2px 8px 8px 8px; padding:10px 14px;
+  font-size:14px; line-height:1.6; color:var(--text);
+  max-width:680px; word-break:break-word;
+}
+.msg-group.own { align-items:flex-end; }
+.msg-group.own .msg-meta { flex-direction:row-reverse; }
+.msg-group.own .msg-bubble { background:var(--msg-own); border-color:var(--accent-dim); border-radius:8px 2px 8px 8px; }
+
+.sys-msg { text-align:center; font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:0.1em; color:var(--text-dimmer); padding:8px 0; }
+.sys-msg span { color:var(--accent-dim); }
+
+.empty-state {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  color:var(--text-dimmer); gap:12px; font-family:'Share Tech Mono',monospace;
+  font-size:11px; letter-spacing:0.15em; text-transform:uppercase;
+}
+.empty-icon { font-size:32px; opacity:0.3; }
+
+.typing-bar {
+  padding:4px 20px; font-family:'Share Tech Mono',monospace; font-size:10px;
+  color:var(--text-dimmer); letter-spacing:0.1em; min-height:22px;
+  background:var(--panel); border-top:1px solid var(--border); flex-shrink:0;
+}
+.input-area {
+  background:var(--panel); border-top:1px solid var(--border);
+  padding:14px 20px; display:flex; align-items:center; gap:12px; flex-shrink:0;
+}
+.input-wrap {
+  flex:1; background:var(--bg2); border:1px solid var(--border);
+  display:flex; align-items:center; transition:border-color 0.2s;
+}
+.input-wrap:focus-within { border-color:var(--accent-dim); }
+#msg-input {
+  flex:1; background:transparent; border:none; padding:11px 16px;
+  color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:14px; outline:none;
+}
+#msg-input::placeholder { color:var(--text-dimmer); }
+.char-count { padding:0 12px; font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--text-dimmer); }
+.send-btn {
+  background:var(--accent); border:none; padding:12px 22px; color:#fff;
+  font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:0.15em;
+  text-transform:uppercase; cursor:pointer; transition:opacity 0.2s; flex-shrink:0;
+}
+.send-btn:hover { opacity:0.85; }
+.send-btn:disabled { opacity:0.3; cursor:not-allowed; }
+
+@media (max-width:600px) {
+  .login-box { padding:32px 24px; }
+  .topbar { padding:0 12px; }
+  .messages-wrap { padding:12px; }
+  .input-area { padding:10px 12px; }
+  .topbar-logo { display:none; }
+}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">// Sistema de Chat</div>
+    <div class="login-title">Entre na conversa</div>
+    <div class="login-sub">Escolha um nome para entrar na sala.</div>
+    <div class="login-field">
+      <label>Seu nome</label>
+      <input type="text" id="name-input" placeholder="Ex: Connor McGragor" maxlength="32" autocomplete="off">
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <button class="login-btn" id="enter-btn">Entrar na sala →</button>
+    <div class="storage-note" id="storage-note">Verificando armazenamento...</div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="topbar-logo">CHAT</div>
+      <div class="topbar-status"><div class="dot" id="status-dot"></div><span id="status-text">Conectando...</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-badge">
+        <div class="user-avatar" id="my-avatar"></div>
+        <span id="my-name-display"></span>
+      </div>
+      <button class="btn-exit" id="exit-btn">Sair</button>
+    </div>
+  </div>
+
+  <div class="messages-wrap" id="messages">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">💬</div>
+      <div>Nenhuma mensagem ainda</div>
+      <div style="opacity:0.5">Seja o primeiro a falar</div>
+    </div>
+  </div>
+
+  <div class="typing-bar" id="typing-bar"></div>
+
+  <div class="input-area">
+    <div class="input-wrap">
+      <input type="text" id="msg-input" placeholder="Digite uma mensagem..." maxlength="400" autocomplete="off">
+      <div class="char-count" id="char-count">400</div>
+    </div>
+    <button class="send-btn" id="send-btn" disabled>Enviar</button>
+  </div>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const MAX_MSGS = 150;
+const POLL_MS  = 2500;
+const SKEY = 'chat-v2';
+
+// ─── Storage layer ────────────────────────────────────────────────────────────
+// window.storage is Claude's built-in persistent shared store.
+// Falls back to in-memory if unavailable (single session only).
+let useShared = false;
+let memStore = { messages: [], typing: {} };
+
+async function storageProbe() {
+  const note = document.getElementById('storage-note');
+  try {
+    if (typeof window.storage?.set === 'function') {
+      await window.storage.set(SKEY + '-ping', 'ok', true);
+      const r = await window.storage.get(SKEY + '-ping', true);
+      if (r?.value === 'ok') {
+        useShared = true;
+        note.textContent = '● armazenamento compartilhado';
+        note.style.color = 'var(--green)';
+        return;
+      }
+    }
+  } catch(e) {
+    console.warn('[chat] shared storage probe failed:', e);
+  }
+  useShared = false;
+  note.textContent = '● modo local — apenas esta aba';
+  note.style.color = 'var(--text-dimmer)';
+}
+
+async function dbRead() {
+  if (useShared) {
+    try {
+      const r = await window.storage.get(SKEY, true);
+      return r ? JSON.parse(r.value) : { messages: [], typing: {} };
+    } catch { return { messages: [], typing: {} }; }
+  }
+  return JSON.parse(JSON.stringify(memStore));
+}
+
+async function dbWrite(data) {
+  if (useShared) {
+    await window.storage.set(SKEY, JSON.stringify(data), true);
+  } else {
+    memStore = JSON.parse(JSON.stringify(data));
+  }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const PAL = ['#7c6af7','#3ecf8e','#f0a060','#e8498a','#60c8f0','#c8a03c','#a060f0','#f06080','#40b8b8','#e06040'];
+const hc  = n => { let h=0; for(let c of n) h=(h*31+c.charCodeAt(0))%PAL.length; return PAL[h]; };
+const ini = n => n.trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const ts  = t => new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+let myName=null, pollTimer=null, lastCount=-1, typingTimer=null;
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderMsgs(msgs) {
+  if (msgs.length === lastCount) return;
+  lastCount = msgs.length;
+  const c = document.getElementById('messages');
+  const empty = document.getElementById('empty-state');
+  if (empty) empty.style.display = msgs.length ? 'none' : 'flex';
+  // Clear non-empty-state children
+  [...c.children].forEach(ch => { if (ch.id !== 'empty-state') ch.remove(); });
+  let pName=null, pGroup=null;
+  for (const m of msgs) {
+    if (m.type === 'system') {
+      const el = document.createElement('div');
+      el.className = 'sys-msg';
+      el.innerHTML = `<span>${esc(m.text)}</span>`;
+      c.appendChild(el);
+      pName=null; pGroup=null; continue;
+    }
+    const own = m.name === myName;
+    if (m.name !== pName) {
+      pGroup = document.createElement('div');
+      pGroup.className = 'msg-group' + (own?' own':'');
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
+      meta.innerHTML = `<span class="msg-author" style="color:${hc(m.name)}">${esc(m.name)}</span><span class="msg-time">${ts(m.ts)}</span>`;
+      pGroup.appendChild(meta);
+      c.appendChild(pGroup);
+      pName = m.name;
+    }
+    const b = document.createElement('div');
+    b.className = 'msg-bubble';
+    b.textContent = m.text;
+    pGroup.appendChild(b);
+  }
+  c.scrollTop = c.scrollHeight;
+}
+
+function renderTyping(typing) {
+  const now = Date.now();
+  const active = Object.entries(typing||{})
+    .filter(([n,t]) => n!==myName && now-t<4000)
+    .map(([n]) => n);
+  document.getElementById('typing-bar').textContent = active.length
+    ? `${active.join(', ')} ${active.length===1?'está':'estão'} digitando...` : '';
+}
+
+function setStatus(ok) {
+  document.getElementById('status-dot').className = 'dot' + (ok?'':' offline');
+  document.getElementById('status-text').textContent = ok ? 'Ao vivo' : 'Reconectando...';
+}
+
+// ─── Poll / send ──────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const d = await dbRead();
+    renderMsgs(d.messages||[]);
+    renderTyping(d.typing||{});
+    setStatus(true);
+  } catch { setStatus(false); }
+}
+
+async function send() {
+  const inp = document.getElementById('msg-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  document.getElementById('char-count').textContent = '400';
+  document.getElementById('send-btn').disabled = true;
+  try {
+    const d = await dbRead();
+    const msgs = d.messages||[];
+    msgs.push({ name:myName, text, ts:Date.now(), type:'msg' });
+    if (msgs.length > MAX_MSGS) msgs.splice(0, msgs.length-MAX_MSGS);
+    const typing = d.typing||{};
+    delete typing[myName];
+    await dbWrite({ messages:msgs, typing });
+    lastCount = -1;
+    await poll();
+  } catch(e) { console.error('[chat] send:', e); }
+}
+
+async function setTyping(active) {
+  if (!myName) return;
+  try {
+    const d = await dbRead();
+    const t = d.typing||{};
+    if (active) t[myName]=Date.now(); else delete t[myName];
+    await dbWrite({...d, typing:t});
+  } catch {}
+}
+
+// ─── Enter / Exit ─────────────────────────────────────────────────────────────
+async function enter() {
+  const inp  = document.getElementById('name-input');
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  const btn  = document.getElementById('enter-btn');
+  const err  = document.getElementById('login-err');
+  btn.textContent='Conectando...'; btn.disabled=true; err.style.display='none';
+  try {
+    myName = name;
+    document.getElementById('my-name-display').textContent = name;
+    const av = document.getElementById('my-avatar');
+    av.textContent = ini(name); av.style.background = hc(name);
+    const d = await dbRead();
+    const msgs = d.messages||[];
+    msgs.push({ type:'system', text:`${name} entrou na sala.`, ts:Date.now() });
+    await dbWrite({ messages:msgs, typing:d.typing||{} });
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').classList.add('visible');
+    lastCount=-1;
+    await poll();
+    pollTimer = setInterval(poll, POLL_MS);
+    document.getElementById('msg-input').focus();
+  } catch(e) {
+    console.error('[chat] enter:', e);
+    err.textContent = 'Erro ao conectar: ' + (e?.message||'desconhecido');
+    err.style.display='block';
+    btn.textContent='Entrar na sala →'; btn.disabled=false;
+    myName=null;
+  }
+}
+
+async function exit() {
+  clearInterval(pollTimer);
+  try {
+    const d = await dbRead();
+    const msgs = d.messages||[];
+    msgs.push({ type:'system', text:`${myName} saiu da sala.`, ts:Date.now() });
+    const typing = d.typing||{}; delete typing[myName];
+    await dbWrite({ messages:msgs, typing });
+  } catch {}
+  myName=null; lastCount=-1;
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('name-input').value='';
+  document.getElementById('enter-btn').textContent='Entrar na sala →';
+  document.getElementById('enter-btn').disabled=false;
+}
+
+// ─── Wire up ──────────────────────────────────────────────────────────────────
+document.getElementById('enter-btn').addEventListener('click', enter);
+document.getElementById('name-input').addEventListener('keydown', e=>{ if(e.key==='Enter') enter(); });
+document.getElementById('send-btn').addEventListener('click', send);
+document.getElementById('msg-input').addEventListener('keydown', e=>{
+  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); }
+});
+document.getElementById('msg-input').addEventListener('input', function(){
+  const len = this.value.length;
+  document.getElementById('char-count').textContent = 400-len;
+  document.getElementById('send-btn').disabled = len===0;
+  clearTimeout(typingTimer);
+  if(len>0){ setTyping(true); typingTimer=setTimeout(()=>setTyping(false),2500); }
+  else setTyping(false);
+});
+document.getElementById('exit-btn').addEventListener('click', exit);
+window.addEventListener('beforeunload', ()=>{ if(myName) setTyping(false); });
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+storageProbe();
+</script>
+</body>
+</html>
